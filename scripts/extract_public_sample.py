@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from datetime import datetime, timezone
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 START = "2025-01-01"
 END = "2025-01-03"
+JAO_TEST_DATE = "2025-01-06T23:00:00.000Z"
 OUT = Path("data/sample")
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -32,6 +36,18 @@ SMARD_FILTERS = {
 
 SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "european-electricity-market-intelligence/0.1"})
+retry = Retry(
+    total=6,
+    connect=4,
+    read=4,
+    status=6,
+    backoff_factor=1.5,
+    status_forcelist=(429, 500, 502, 503, 504),
+    allowed_methods=frozenset({"GET"}),
+    respect_retry_after_header=True,
+    raise_on_status=False,
+)
+SESSION.mount("https://", HTTPAdapter(max_retries=retry))
 
 
 def get_json(url: str, params: dict | None = None, timeout: int = 45):
@@ -156,10 +172,10 @@ def fetch_smard_price(zone: str, filter_id: int) -> pd.DataFrame:
 
 
 def fetch_jao_max_exchanges() -> pd.DataFrame:
-    # Public Core API uses a date parameter.  One day is enough for a connectivity smoke test.
+    # Test on a normal business day; holiday dates can return a 400 on the public endpoint.
     payload = get_json(
         "https://publicationtool.jao.eu/core/api/core/maxExchanges/index",
-        {"date": "2025-01-01T23:00:00.000Z"},
+        {"date": JAO_TEST_DATE},
     )
     rows = payload.get("maxExchanges", payload if isinstance(payload, list) else [])
     return pd.json_normalize(rows)
@@ -194,9 +210,12 @@ def main():
             except Exception as exc:
                 manifest["failed"].append({"task": task_name, "error": f"{type(exc).__name__}: {exc}"})
                 print(f"FAIL {task_name}: {exc}")
+            if task_name.startswith("energy_charts_"):
+                # Fraunhofer's API is public but rate-limited. Be polite between calls.
+                time.sleep(2.0)
 
     try:
-        info = save_csv(fetch_jao_max_exchanges(), "jao_max_exchanges_2025-01-01.csv")
+        info = save_csv(fetch_jao_max_exchanges(), "jao_max_exchanges_2025-01-06.csv")
         manifest["success"].append({"task": "jao_max_exchanges", **info})
         print(f"OK   jao_max_exchanges: {info['rows']} rows")
     except Exception as exc:
