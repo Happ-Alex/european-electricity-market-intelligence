@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-09-07T20:12:11.034621+00:00",
+  "generated_at_utc": "2026-09-07T20:15:39.123979+00:00",
   "period": {
     "start": "2025-01-01",
     "end": "2025-01-03"
@@ -143,6 +143,17 @@
       ]
     },
     {
+      "task": "energy_charts_price_BE",
+      "file": "data/sample/energy_charts_price_BE.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "price_eur_mwh",
+        "source"
+      ]
+    },
+    {
       "task": "energy_charts_power_BE",
       "file": "data/sample/energy_charts_power_BE.csv",
       "rows": 72,
@@ -262,6 +273,17 @@
       ]
     },
     {
+      "task": "energy_charts_price_PL",
+      "file": "data/sample/energy_charts_price_PL.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "price_eur_mwh",
+        "source"
+      ]
+    },
+    {
       "task": "energy_charts_power_PL",
       "file": "data/sample/energy_charts_power_PL.csv",
       "rows": 288,
@@ -319,6 +341,48 @@
       ]
     },
     {
+      "task": "energy_charts_price_CZ",
+      "file": "data/sample/energy_charts_price_CZ.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "price_eur_mwh",
+        "source"
+      ]
+    },
+    {
+      "task": "energy_charts_power_CZ",
+      "file": "data/sample/energy_charts_power_CZ.csv",
+      "rows": 288,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "hydro_pumped_storage_consumption",
+        "cross_border_electricity_trading",
+        "nuclear",
+        "hydro_run-of-river",
+        "biomass",
+        "fossil_brown_coal___lignite",
+        "fossil_hard_coal",
+        "fossil_oil",
+        "fossil_coal-derived_gas",
+        "fossil_gas",
+        "hydro_water_reservoir",
+        "hydro_pumped_storage",
+        "others",
+        "other_renewables",
+        "waste",
+        "wind_onshore",
+        "solar",
+        "load",
+        "residual_load",
+        "renewable_share_of_load",
+        "renewable_share_of_generation",
+        "source"
+      ]
+    },
+    {
       "task": "weather_CZ",
       "file": "data/sample/weather_CZ.csv",
       "rows": 72,
@@ -349,24 +413,8 @@
   ],
   "failed": [
     {
-      "task": "energy_charts_price_BE",
-      "error": "HTTPError: 429 Client Error: Too Many Requests for url: https://api.energy-charts.info/price?bzn=BE&start=2025-01-01&end=2025-01-03"
-    },
-    {
-      "task": "energy_charts_price_PL",
-      "error": "HTTPError: 429 Client Error: Too Many Requests for url: https://api.energy-charts.info/price?bzn=PL&start=2025-01-01&end=2025-01-03"
-    },
-    {
-      "task": "energy_charts_price_CZ",
-      "error": "HTTPError: 429 Client Error: Too Many Requests for url: https://api.energy-charts.info/price?bzn=CZ&start=2025-01-01&end=2025-01-03"
-    },
-    {
-      "task": "energy_charts_power_CZ",
-      "error": "HTTPError: 429 Client Error: Too Many Requests for url: https://api.energy-charts.info/public_power?country=cz&start=2025-01-01&end=2025-01-03"
-    },
-    {
       "task": "jao_max_exchanges",
-      "error": "HTTPError: 400 Client Error: Bad Request for url: https://publicationtool.jao.eu/core/api/core/maxExchanges/index?date=2025-01-01T23%3A00%3A00.000Z"
+      "error": "HTTPError: 400 Client Error: Bad Request for url: https://publicationtool.jao.eu/core/api/core/maxExchanges/index?date=2025-01-06T23%3A00%3A00.000Z"
     }
   ]
 }
