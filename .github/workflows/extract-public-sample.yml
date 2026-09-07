@@ -1,0 +1,41 @@
+name: Extract public sample data
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/extract_public_sample.py'
+      - '.github/workflows/extract-public-sample.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pandas requests
+
+      - name: Extract public sample data
+        run: python scripts/extract_public_sample.py
+
+      - name: Commit available sample data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/sample
+          if git diff --cached --quiet; then
+            echo "No sample data changes to commit"
+          else
+            git commit -m "Add extracted public sample data"
+            git push
+          fi
