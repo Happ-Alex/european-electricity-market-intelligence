@@ -1,0 +1,104 @@
+project:
+  timezone: UTC
+  start_date: '2025-01-01'
+  end_date: '2025-01-03'
+
+zones:
+  DE_LU:
+    eic: 10Y1001A1001A82H
+    weather:
+      latitude: 52.5200
+      longitude: 13.4050
+  FR:
+    eic: 10YFR-RTE------C
+    weather:
+      latitude: 48.8566
+      longitude: 2.3522
+  BE:
+    eic: 10YBE----------2
+    weather:
+      latitude: 50.8503
+      longitude: 4.3517
+  NL:
+    eic: 10YNL----------L
+    weather:
+      latitude: 52.3676
+      longitude: 4.9041
+  PL:
+    eic: 10YPL-AREA-----S
+    weather:
+      latitude: 52.2297
+      longitude: 21.0122
+  CZ:
+    eic: 10YCZ-CEPS-----N
+    weather:
+      latitude: 50.0755
+      longitude: 14.4378
+
+borders:
+  - [DE_LU, FR]
+  - [DE_LU, BE]
+  - [DE_LU, NL]
+  - [DE_LU, PL]
+  - [DE_LU, CZ]
+  - [FR, BE]
+  - [BE, NL]
+
+entsoe:
+  chunk_days: 7
+  datasets:
+    day_ahead_prices:
+      documentType: A44
+      processType: A01
+      scope: zone
+    actual_load:
+      documentType: A65
+      processType: A16
+      scope: zone
+    day_ahead_load_forecast:
+      documentType: A65
+      processType: A01
+      scope: zone
+    actual_generation_per_type:
+      documentType: A75
+      processType: A16
+      scope: zone
+    day_ahead_generation_forecast:
+      documentType: A71
+      processType: A01
+      scope: zone
+    wind_solar_forecast:
+      documentType: A69
+      processType: A01
+      scope: zone
+    physical_flows:
+      documentType: A11
+      scope: border
+    scheduled_exchanges:
+      documentType: A09
+      scope: border
+    transfer_capacity:
+      documentType: A61
+      contract_MarketAgreement_Type: A01
+      scope: border
+
+jao:
+  # Endpoint paths are configurable because JAO periodically changes routing.
+  # Validate these paths in the Core API explorer before a long backfill.
+  endpoints:
+    max_exchanges: maxExchanges
+    max_net_positions: maxNetPos
+    final_computation: finalComputation
+  request_params:
+    # The client automatically adds from/to in ISO-8601 form.
+    page: 0
+    size: 10000
+
+weather:
+  base_url: https://archive-api.open-meteo.com/v1/archive
+  hourly:
+    - temperature_2m
+    - wind_speed_10m
+    - wind_speed_100m
+    - cloud_cover
+    - shortwave_radiation

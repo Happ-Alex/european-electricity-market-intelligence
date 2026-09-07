@@ -1,0 +1,7 @@
+pandas>=2.2,<3
+pyarrow>=17,<21
+requests>=2.32,<3
+PyYAML>=6.0,<7
+python-dotenv>=1.0,<2
+tenacity>=9.0,<10
+lxml>=5.3,<7
