@@ -1,0 +1,372 @@
+{
+  "generated_at_utc": "2026-09-07T20:12:11.034621+00:00",
+  "period": {
+    "start": "2025-01-01",
+    "end": "2025-01-03"
+  },
+  "success": [
+    {
+      "task": "energy_charts_price_DE_LU",
+      "file": "data/sample/energy_charts_price_DE_LU.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "price_eur_mwh",
+        "source"
+      ]
+    },
+    {
+      "task": "energy_charts_power_DE_LU",
+      "file": "data/sample/energy_charts_power_DE_LU.csv",
+      "rows": 288,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "hydro_pumped_storage_consumption",
+        "cross_border_electricity_trading",
+        "hydro_run-of-river",
+        "biomass",
+        "fossil_brown_coal___lignite",
+        "fossil_hard_coal",
+        "fossil_oil",
+        "fossil_coal-derived_gas",
+        "fossil_gas",
+        "geothermal",
+        "hydro_water_reservoir",
+        "hydro_pumped_storage",
+        "others",
+        "waste",
+        "wind_offshore",
+        "wind_onshore",
+        "solar",
+        "load",
+        "residual_load",
+        "renewable_share_of_load",
+        "renewable_share_of_generation",
+        "source"
+      ]
+    },
+    {
+      "task": "weather_DE_LU",
+      "file": "data/sample/weather_DE_LU.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "temperature_2m",
+        "wind_speed_10m",
+        "wind_speed_100m",
+        "cloud_cover",
+        "shortwave_radiation",
+        "timestamp_utc",
+        "latitude",
+        "longitude",
+        "source"
+      ]
+    },
+    {
+      "task": "smard_price_DE_LU",
+      "file": "data/sample/smard_price_DE_LU.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "price_eur_mwh",
+        "timestamp_utc",
+        "source"
+      ]
+    },
+    {
+      "task": "energy_charts_price_FR",
+      "file": "data/sample/energy_charts_price_FR.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "price_eur_mwh",
+        "source"
+      ]
+    },
+    {
+      "task": "energy_charts_power_FR",
+      "file": "data/sample/energy_charts_power_FR.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "hydro_pumped_storage_consumption",
+        "cross_border_electricity_trading",
+        "nuclear",
+        "hydro_run-of-river",
+        "biomass",
+        "fossil_hard_coal",
+        "fossil_oil",
+        "fossil_gas",
+        "hydro_water_reservoir",
+        "hydro_pumped_storage",
+        "waste",
+        "wind_offshore",
+        "wind_onshore",
+        "solar",
+        "load",
+        "residual_load",
+        "renewable_share_of_load",
+        "renewable_share_of_generation",
+        "source"
+      ]
+    },
+    {
+      "task": "weather_FR",
+      "file": "data/sample/weather_FR.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "temperature_2m",
+        "wind_speed_10m",
+        "wind_speed_100m",
+        "cloud_cover",
+        "shortwave_radiation",
+        "timestamp_utc",
+        "latitude",
+        "longitude",
+        "source"
+      ]
+    },
+    {
+      "task": "smard_price_FR",
+      "file": "data/sample/smard_price_FR.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "price_eur_mwh",
+        "timestamp_utc",
+        "source"
+      ]
+    },
+    {
+      "task": "energy_charts_power_BE",
+      "file": "data/sample/energy_charts_power_BE.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "hydro_pumped_storage_consumption",
+        "cross_border_electricity_trading",
+        "nuclear",
+        "hydro_run-of-river",
+        "biomass",
+        "fossil_oil",
+        "fossil_gas",
+        "hydro_pumped_storage",
+        "battery",
+        "others",
+        "waste",
+        "wind_offshore",
+        "wind_onshore",
+        "solar",
+        "load",
+        "residual_load",
+        "renewable_share_of_load",
+        "renewable_share_of_generation",
+        "source"
+      ]
+    },
+    {
+      "task": "weather_BE",
+      "file": "data/sample/weather_BE.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "temperature_2m",
+        "wind_speed_10m",
+        "wind_speed_100m",
+        "cloud_cover",
+        "shortwave_radiation",
+        "timestamp_utc",
+        "latitude",
+        "longitude",
+        "source"
+      ]
+    },
+    {
+      "task": "smard_price_BE",
+      "file": "data/sample/smard_price_BE.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "price_eur_mwh",
+        "timestamp_utc",
+        "source"
+      ]
+    },
+    {
+      "task": "energy_charts_price_NL",
+      "file": "data/sample/energy_charts_price_NL.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "price_eur_mwh",
+        "source"
+      ]
+    },
+    {
+      "task": "energy_charts_power_NL",
+      "file": "data/sample/energy_charts_power_NL.csv",
+      "rows": 288,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "cross_border_electricity_trading",
+        "nuclear",
+        "biomass",
+        "fossil_hard_coal",
+        "fossil_gas",
+        "others",
+        "waste",
+        "wind_offshore",
+        "wind_onshore",
+        "solar",
+        "load",
+        "residual_load",
+        "renewable_share_of_load",
+        "renewable_share_of_generation",
+        "source"
+      ]
+    },
+    {
+      "task": "weather_NL",
+      "file": "data/sample/weather_NL.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "temperature_2m",
+        "wind_speed_10m",
+        "wind_speed_100m",
+        "cloud_cover",
+        "shortwave_radiation",
+        "timestamp_utc",
+        "latitude",
+        "longitude",
+        "source"
+      ]
+    },
+    {
+      "task": "smard_price_NL",
+      "file": "data/sample/smard_price_NL.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "price_eur_mwh",
+        "timestamp_utc",
+        "source"
+      ]
+    },
+    {
+      "task": "energy_charts_power_PL",
+      "file": "data/sample/energy_charts_power_PL.csv",
+      "rows": 288,
+      "columns": [
+        "zone",
+        "timestamp_utc",
+        "hydro_pumped_storage_consumption",
+        "cross_border_electricity_trading",
+        "hydro_run-of-river",
+        "biomass",
+        "fossil_brown_coal___lignite",
+        "fossil_hard_coal",
+        "fossil_oil",
+        "fossil_coal-derived_gas",
+        "fossil_gas",
+        "hydro_water_reservoir",
+        "hydro_pumped_storage",
+        "others",
+        "other_renewables",
+        "wind_onshore",
+        "solar",
+        "load",
+        "residual_load",
+        "renewable_share_of_load",
+        "renewable_share_of_generation",
+        "source"
+      ]
+    },
+    {
+      "task": "weather_PL",
+      "file": "data/sample/weather_PL.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "temperature_2m",
+        "wind_speed_10m",
+        "wind_speed_100m",
+        "cloud_cover",
+        "shortwave_radiation",
+        "timestamp_utc",
+        "latitude",
+        "longitude",
+        "source"
+      ]
+    },
+    {
+      "task": "smard_price_PL",
+      "file": "data/sample/smard_price_PL.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "price_eur_mwh",
+        "timestamp_utc",
+        "source"
+      ]
+    },
+    {
+      "task": "weather_CZ",
+      "file": "data/sample/weather_CZ.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "temperature_2m",
+        "wind_speed_10m",
+        "wind_speed_100m",
+        "cloud_cover",
+        "shortwave_radiation",
+        "timestamp_utc",
+        "latitude",
+        "longitude",
+        "source"
+      ]
+    },
+    {
+      "task": "smard_price_CZ",
+      "file": "data/sample/smard_price_CZ.csv",
+      "rows": 72,
+      "columns": [
+        "zone",
+        "price_eur_mwh",
+        "timestamp_utc",
+        "source"
+      ]
+    }
+  ],
+  "failed": [
+    {
+      "task": "energy_charts_price_BE",
+      "error": "HTTPError: 429 Client Error: Too Many Requests for url: https://api.energy-charts.info/price?bzn=BE&start=2025-01-01&end=2025-01-03"
+    },
+    {
+      "task": "energy_charts_price_PL",
+      "error": "HTTPError: 429 Client Error: Too Many Requests for url: https://api.energy-charts.info/price?bzn=PL&start=2025-01-01&end=2025-01-03"
+    },
+    {
+      "task": "energy_charts_price_CZ",
+      "error": "HTTPError: 429 Client Error: Too Many Requests for url: https://api.energy-charts.info/price?bzn=CZ&start=2025-01-01&end=2025-01-03"
+    },
+    {
+      "task": "energy_charts_power_CZ",
+      "error": "HTTPError: 429 Client Error: Too Many Requests for url: https://api.energy-charts.info/public_power?country=cz&start=2025-01-01&end=2025-01-03"
+    },
+    {
+      "task": "jao_max_exchanges",
+      "error": "HTTPError: 400 Client Error: Bad Request for url: https://publicationtool.jao.eu/core/api/core/maxExchanges/index?date=2025-01-01T23%3A00%3A00.000Z"
+    }
+  ]
+}
