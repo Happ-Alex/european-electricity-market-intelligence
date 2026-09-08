@@ -10,6 +10,7 @@ from src.eem_intel.settings import load_settings
 
 START = datetime(2026, 8, 15, tzinfo=timezone.utc)
 END = datetime(2026, 8, 16, tzinfo=timezone.utc)
+EXPECTED_QUARTER_HOURS = 96
 
 
 def main() -> None:
@@ -41,12 +42,40 @@ def main() -> None:
                 member = f"{border_from}->{border_to}"
 
             resolutions = sorted(str(x) for x in df["resolution"].dropna().unique()) if not df.empty else []
-            line = (
-                f"{name}: member={member}, rows={len(df)}, "
-                f"resolutions={resolutions}, required={required}"
+            unique_timestamps = int(df["timestamp_utc"].nunique()) if not df.empty else 0
+            duplicate_timestamps = int(df.duplicated(["timestamp_utc"], keep=False).sum()) if not df.empty else 0
+            sequences = (
+                sorted(str(x) for x in df["classification_sequence"].dropna().unique())
+                if not df.empty and "classification_sequence" in df.columns
+                else []
             )
-            failed = required and df.empty
-            return name, failed, line
+
+            semantic_errors: list[str] = []
+            if required and df.empty:
+                semantic_errors.append("empty response")
+
+            # These three representative series should form one complete 15-minute
+            # delivery-day grid after A03 variable-block expansion and sequence selection.
+            if name in {"day_ahead_prices", "physical_flows", "scheduled_exchanges"} and not df.empty:
+                if resolutions == ["PT15M"] and unique_timestamps != EXPECTED_QUARTER_HOURS:
+                    semantic_errors.append(
+                        f"expected {EXPECTED_QUARTER_HOURS} unique PT15M timestamps, got {unique_timestamps}"
+                    )
+                if duplicate_timestamps:
+                    semantic_errors.append(f"duplicate timestamp rows={duplicate_timestamps}")
+
+            if name == "day_ahead_prices" and not df.empty:
+                if sequences and sequences != ["1"]:
+                    semantic_errors.append(f"expected DE-LU classification sequence 1, got {sequences}")
+
+            line = (
+                f"{name}: member={member}, rows={len(df)}, unique_ts={unique_timestamps}, "
+                f"duplicate_ts={duplicate_timestamps}, resolutions={resolutions}, "
+                f"sequences={sequences}, required={required}"
+            )
+            if semantic_errors:
+                line += "; QA_ERROR=" + " | ".join(semantic_errors)
+            return name, bool(semantic_errors), line
         except Exception as exc:
             line = f"{name}: ERROR {type(exc).__name__}: {exc}; required={required}"
             return name, required, line
@@ -71,7 +100,7 @@ def main() -> None:
 
     if failures:
         raise RuntimeError(
-            "ENTSO-E required dataset smoke checks failed: " + ", ".join(sorted(failures))
+            "ENTSO-E dataset QA failed: " + ", ".join(sorted(failures))
         )
 
     print("ENTSO-E representative dataset validation: PASSED")
