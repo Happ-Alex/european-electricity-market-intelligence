@@ -1,0 +1,44 @@
+name: Validate ENTSO-E datasets
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/validate-entsoe-datasets.yml'
+      - 'scripts/validate_entsoe_datasets.py'
+      - 'src/eem_intel/extractors/entsoe.py'
+      - 'src/eem_intel/http.py'
+      - 'config/config.yaml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ENTSOE_SECURITY_TOKEN: ${{ secrets.ENTSOE_SECURITY_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate all configured ENTSO-E datasets
+        run: python scripts/validate_entsoe_datasets.py
+
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: entsoe-validation-report
+          path: data/validation/entsoe_validation.json
+          if-no-files-found: warn
+          retention-days: 30
