@@ -1,0 +1,79 @@
+name: ENTSO-E backfill 2019-2026
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/entsoe-backfill-2019-2026.yml'
+
+concurrency:
+  group: entsoe-backfill-2019-2026
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate ENTSO-E before backfill
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENTSOE_SECURITY_TOKEN: ${{ secrets.ENTSOE_SECURITY_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run API and semantic validation
+        run: python scripts/test_entsoe_access.py
+
+  backfill:
+    name: Backfill ${{ matrix.year }}
+    needs: validate
+    if: ${{ needs.validate.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        year: [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+    env:
+      ENTSOE_SECURITY_TOKEN: ${{ secrets.ENTSOE_SECURITY_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download and validate year
+        run: python scripts/backfill_entsoe_year.py --year ${{ matrix.year }}
+
+      - name: Upload yearly ENTSO-E dataset
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: entsoe-${{ matrix.year }}
+          path: data/entsoe_backfill/${{ matrix.year }}
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
