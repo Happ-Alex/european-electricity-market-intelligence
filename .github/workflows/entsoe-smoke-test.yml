@@ -14,6 +14,7 @@ jobs:
     timeout-minutes: 10
     env:
       ENTSOE_SECURITY_TOKEN: ${{ secrets.ENTSOE_SECURITY_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - name: Checkout
