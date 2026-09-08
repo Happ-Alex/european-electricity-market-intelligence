@@ -64,7 +64,6 @@ def adaptive_fetch(fetch_fn, start: datetime, end: datetime, *, depth: int = 0) 
         raise error
 
     midpoint = start + duration / 2
-    # Keep split boundaries on whole hours so ENTSO-E period parameters are stable.
     midpoint = midpoint.replace(minute=0, second=0, microsecond=0)
     if midpoint <= start or midpoint >= end:
         raise error
@@ -83,11 +82,43 @@ def adaptive_fetch(fetch_fn, start: datetime, end: datetime, *, depth: int = 0) 
     return pd.concat(frames, ignore_index=True)
 
 
-def save_frame(df: pd.DataFrame, path: Path) -> None:
+def clean_frame(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    sort_cols = [
+        c
+        for c in ["timestamp_utc", "mRID", "position"]
+        if c in df.columns
+    ]
+    return df.drop_duplicates().sort_values(sort_cols).reset_index(drop=True)
+
+
+def save_frame(df: pd.DataFrame, path: Path) -> str | None:
+    if df.empty:
+        return None
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not df.empty:
-        df = df.drop_duplicates().sort_values([c for c in ["timestamp_utc", "mRID", "position"] if c in df.columns])
     df.to_parquet(path, index=False, compression="zstd")
+    return str(path)
+
+
+def member_manifest(df: pd.DataFrame, path: Path, root: Path) -> dict:
+    rows = int(len(df))
+    result = {
+        "status": "ok" if rows else "empty",
+        "rows": rows,
+    }
+    if rows:
+        result.update(
+            {
+                "file": str(path.relative_to(root)),
+                "timestamp_min": str(df["timestamp_utc"].min()),
+                "timestamp_max": str(df["timestamp_utc"].max()),
+                "unique_timestamps": int(df["timestamp_utc"].nunique()),
+                "resolutions": sorted(str(x) for x in df["resolution"].dropna().unique()),
+                "timeseries": int(df["mRID"].nunique(dropna=True)),
+            }
+        )
+    return result
 
 
 def main() -> None:
@@ -128,13 +159,14 @@ def main() -> None:
         "datasets": {},
     }
 
-    required_without_data: list[str] = []
+    required_member_failures: list[str] = []
 
     for dataset_name, ds in cfg["entsoe"]["datasets"].items():
         print(f"\n=== {dataset_name} ===", flush=True)
+        required = bool(ds.get("required", False))
         dataset_manifest = {
             "scope": ds["scope"],
-            "required": bool(ds.get("required", False)),
+            "required": required,
             "members": {},
             "total_rows": 0,
         }
@@ -154,15 +186,14 @@ def main() -> None:
                     )
                     if not df.empty:
                         df["zone"] = zone_name
+                    df = clean_frame(df)
                     path = root / dataset_name / f"{zone_name}.parquet"
                     save_frame(df, path)
-                    rows = int(len(df))
-                    dataset_manifest["members"][zone_name] = {
-                        "status": "ok" if rows else "empty",
-                        "rows": rows,
-                        "file": str(path.relative_to(root)),
-                    }
-                    dataset_manifest["total_rows"] += rows
+                    info = member_manifest(df, path, root)
+                    dataset_manifest["members"][zone_name] = info
+                    dataset_manifest["total_rows"] += info["rows"]
+                    if required and info["status"] != "ok":
+                        required_member_failures.append(f"{dataset_name}/{zone_name}: empty")
                 except Exception as exc:
                     dataset_manifest["members"][zone_name] = {
                         "status": "error",
@@ -170,6 +201,10 @@ def main() -> None:
                         "error": f"{type(exc).__name__}: {exc}",
                     }
                     print(f"ERROR {dataset_name}/{zone_name}: {exc}", flush=True)
+                    if required:
+                        required_member_failures.append(
+                            f"{dataset_name}/{zone_name}: {type(exc).__name__}"
+                        )
 
         elif ds["scope"] == "border":
             for zone_a, zone_b in cfg["borders"]:
@@ -191,15 +226,14 @@ def main() -> None:
                         if not df.empty:
                             df["from_zone"] = src
                             df["to_zone"] = dst
+                        df = clean_frame(df)
                         path = root / dataset_name / f"{key}.parquet"
                         save_frame(df, path)
-                        rows = int(len(df))
-                        dataset_manifest["members"][key] = {
-                            "status": "ok" if rows else "empty",
-                            "rows": rows,
-                            "file": str(path.relative_to(root)),
-                        }
-                        dataset_manifest["total_rows"] += rows
+                        info = member_manifest(df, path, root)
+                        dataset_manifest["members"][key] = info
+                        dataset_manifest["total_rows"] += info["rows"]
+                        if required and info["status"] != "ok":
+                            required_member_failures.append(f"{dataset_name}/{key}: empty")
                     except Exception as exc:
                         dataset_manifest["members"][key] = {
                             "status": "error",
@@ -207,11 +241,13 @@ def main() -> None:
                             "error": f"{type(exc).__name__}: {exc}",
                         }
                         print(f"ERROR {dataset_name}/{src}->{dst}: {exc}", flush=True)
+                        if required:
+                            required_member_failures.append(
+                                f"{dataset_name}/{key}: {type(exc).__name__}"
+                            )
         else:
             raise ValueError(f"Unknown ENTSO-E scope: {ds['scope']}")
 
-        if dataset_manifest["required"] and dataset_manifest["total_rows"] == 0:
-            required_without_data.append(dataset_name)
         manifest["datasets"][dataset_name] = dataset_manifest
 
     manifest_path = root / "manifest.json"
@@ -221,8 +257,8 @@ def main() -> None:
     attribution.write_text(
         "Source: ENTSO-E Transparency Platform (https://transparency.entsoe.eu/)\n"
         "Retrieved through the ENTSO-E Transparency Platform Web API.\n"
-        "The project must comply with the ENTSO-E Transparency Platform terms and the\n"
-        "applicable re-use licence for each data item.\n",
+        "Use and redistribution must comply with the ENTSO-E Transparency Platform\n"
+        "terms and the applicable re-use licence; retain source attribution.\n",
         encoding="utf-8",
     )
 
@@ -230,10 +266,13 @@ def main() -> None:
     for name, info in manifest["datasets"].items():
         print(f"{name}: {info['total_rows']} rows")
 
-    if required_without_data:
+    if required_member_failures:
         raise RuntimeError(
-            "Required datasets with zero rows for this year: " + ", ".join(required_without_data)
+            "Required ENTSO-E member downloads incomplete: "
+            + " | ".join(required_member_failures)
         )
+
+    print(f"ENTSO-E {year} backfill: COMPLETE")
 
 
 if __name__ == "__main__":
