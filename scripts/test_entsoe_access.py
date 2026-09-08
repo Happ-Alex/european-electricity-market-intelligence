@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 from src.eem_intel.extractors.entsoe import EntsoeExtractor
@@ -17,12 +18,6 @@ def main() -> None:
         raise RuntimeError("ENTSOE_SECURITY_TOKEN is not available to the workflow")
 
     cfg = settings.config
-    extractor = EntsoeExtractor(
-        base_url=settings.entsoe_base_url,
-        security_token=settings.entsoe_token,
-        http=HttpClient(timeout=90),
-    )
-
     zone_name = "DE_LU"
     zone_eic = cfg["zones"][zone_name]["eic"]
     border_from = "DE_LU"
@@ -30,13 +25,13 @@ def main() -> None:
     border_from_eic = cfg["zones"][border_from]["eic"]
     border_to_eic = cfg["zones"][border_to]["eic"]
 
-    failures: list[str] = []
-
-    print("ENTSO-E API token: accepted")
-    print(f"Sample period: {START.isoformat()} -> {END.isoformat()}")
-
-    for name, ds in cfg["entsoe"]["datasets"].items():
+    def run_one(name: str, ds: dict) -> tuple[str, bool, str]:
         required = bool(ds.get("required", False))
+        extractor = EntsoeExtractor(
+            base_url=settings.entsoe_base_url,
+            security_token=settings.entsoe_token,
+            http=HttpClient(timeout=90),
+        )
         try:
             if ds["scope"] == "zone":
                 df = extractor.fetch_zone(ds, zone_eic, START, END)
@@ -46,19 +41,38 @@ def main() -> None:
                 member = f"{border_from}->{border_to}"
 
             resolutions = sorted(str(x) for x in df["resolution"].dropna().unique()) if not df.empty else []
-            print(
+            line = (
                 f"{name}: member={member}, rows={len(df)}, "
                 f"resolutions={resolutions}, required={required}"
             )
-            if required and df.empty:
-                failures.append(f"{name}: empty response")
+            failed = required and df.empty
+            return name, failed, line
         except Exception as exc:
-            print(f"{name}: ERROR {type(exc).__name__}: {exc}")
-            if required:
-                failures.append(f"{name}: {type(exc).__name__}: {exc}")
+            line = f"{name}: ERROR {type(exc).__name__}: {exc}; required={required}"
+            return name, required, line
+
+    print("ENTSO-E API token: accepted")
+    print(f"Sample period: {START.isoformat()} -> {END.isoformat()}")
+
+    failures: list[str] = []
+    results: dict[str, str] = {}
+    datasets = cfg["entsoe"]["datasets"]
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(run_one, name, ds): name for name, ds in datasets.items()}
+        for future in as_completed(futures):
+            name, failed, line = future.result()
+            results[name] = line
+            if failed:
+                failures.append(name)
+
+    for name in datasets:
+        print(results[name])
 
     if failures:
-        raise RuntimeError("ENTSO-E required dataset smoke checks failed: " + " | ".join(failures))
+        raise RuntimeError(
+            "ENTSO-E required dataset smoke checks failed: " + ", ".join(sorted(failures))
+        )
 
     print("ENTSO-E representative dataset validation: PASSED")
 
