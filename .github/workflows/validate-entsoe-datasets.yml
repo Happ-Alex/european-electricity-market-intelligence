@@ -2,14 +2,10 @@ name: Validate ENTSO-E datasets
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/validate-entsoe-datasets.yml'
-      - 'scripts/validate_entsoe_datasets.py'
-      - 'src/eem_intel/extractors/entsoe.py'
-      - 'src/eem_intel/http.py'
-      - 'config/config.yaml'
+
+concurrency:
+  group: entsoe-exhaustive-validation
+  cancel-in-progress: true
 
 jobs:
   validate:
