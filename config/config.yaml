@@ -51,6 +51,11 @@ entsoe:
       documentType: A44
       contract_MarketAgreement.Type: A01
       domain_params: [in_Domain, out_Domain]
+      # DE-LU publishes multiple day-ahead price sequences. Sequence 1 is the
+      # SDAC series used for the market price in this project.
+      domain_overrides:
+        10Y1001A1001A82H:
+          classificationSequence_AttributeInstanceComponent.position: 1
       scope: zone
       required: true
     actual_load:
