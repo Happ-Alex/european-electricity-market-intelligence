@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 
 import pandas as pd
@@ -21,22 +21,28 @@ class EntsoeExtractor:
             ts = ts.replace(tzinfo=timezone.utc)
         return ts.astimezone(timezone.utc).strftime("%Y%m%d%H%M")
 
+    @staticmethod
+    def _base_dataset_params(dataset_params: dict) -> dict:
+        internal_keys = {"scope", "domain_params", "required", "chunk_days"}
+        return {k: v for k, v in dataset_params.items() if k not in internal_keys}
+
     def _request(self, params: dict) -> str:
         query = {"securityToken": self.security_token, **params}
         return self.http.get(self.base_url, params=query).text
 
     def fetch_zone(self, dataset_params: dict, domain: str, start: datetime, end: datetime) -> pd.DataFrame:
-        params = {k: v for k, v in dataset_params.items() if k != "scope"}
+        params = self._base_dataset_params(dataset_params)
+        domain_params = dataset_params.get("domain_params", ["in_Domain", "out_Domain"])
+        for param_name in domain_params:
+            params[param_name] = domain
         params.update({
-            "in_Domain": domain,
-            "out_Domain": domain,
             "periodStart": self._format_period(start),
             "periodEnd": self._format_period(end),
         })
         return self.parse_timeseries(self._request(params))
 
     def fetch_border(self, dataset_params: dict, out_domain: str, in_domain: str, start: datetime, end: datetime) -> pd.DataFrame:
-        params = {k: v for k, v in dataset_params.items() if k != "scope"}
+        params = self._base_dataset_params(dataset_params)
         params.update({
             "out_Domain": out_domain,
             "in_Domain": in_domain,
@@ -79,10 +85,14 @@ class EntsoeExtractor:
             series_meta = {
                 "mRID": cls._child_text(ts, "mRID"),
                 "business_type": cls._child_text(ts, "businessType"),
+                "process_type": cls._child_text(ts, "process.processType"),
                 "curve_type": cls._child_text(ts, "curveType"),
                 "psr_type": cls._child_text(ts, "psrType"),
                 "in_domain": cls._child_text(ts, "in_Domain.mRID"),
                 "out_domain": cls._child_text(ts, "out_Domain.mRID"),
+                "in_bidding_zone": cls._child_text(ts, "inBiddingZone_Domain.mRID"),
+                "out_bidding_zone": cls._child_text(ts, "outBiddingZone_Domain.mRID"),
+                "contract_market_agreement_type": cls._child_text(ts, "contract_MarketAgreement.type"),
                 "currency": cls._child_text(ts, "currency_Unit.name"),
                 "price_unit": cls._child_text(ts, "price_Measure_Unit.name"),
                 "quantity_unit": cls._child_text(ts, "quantity_Measure_Unit.name"),
