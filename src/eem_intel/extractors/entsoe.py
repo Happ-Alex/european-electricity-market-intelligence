@@ -32,6 +32,24 @@ class EntsoeExtractor:
         }
         return {k: v for k, v in dataset_params.items() if k not in internal_keys}
 
+    @staticmethod
+    def _clip_interval(df: pd.DataFrame, start: datetime, end: datetime) -> pd.DataFrame:
+        if df.empty or "timestamp_utc" not in df.columns:
+            return df
+        start_ts = pd.Timestamp(start)
+        end_ts = pd.Timestamp(end)
+        if start_ts.tzinfo is None:
+            start_ts = start_ts.tz_localize("UTC")
+        else:
+            start_ts = start_ts.tz_convert("UTC")
+        if end_ts.tzinfo is None:
+            end_ts = end_ts.tz_localize("UTC")
+        else:
+            end_ts = end_ts.tz_convert("UTC")
+        return df[
+            (df["timestamp_utc"] >= start_ts) & (df["timestamp_utc"] < end_ts)
+        ].reset_index(drop=True)
+
     def _request(self, params: dict) -> str:
         query = {"securityToken": self.security_token, **params}
         return self.http.get(self.base_url, params=query).text
@@ -48,19 +66,16 @@ class EntsoeExtractor:
         for param_name in domain_params:
             params[param_name] = domain
 
-        # Some ENTSO-E data items publish multiple time series for the same market
-        # area. Per-domain overrides let us explicitly select the required series
-        # (e.g. SDAC sequence 1 for DE-LU day-ahead prices).
         overrides = dataset_params.get("domain_overrides", {}).get(domain, {})
         params.update(overrides)
-
         params.update(
             {
                 "periodStart": self._format_period(start),
                 "periodEnd": self._format_period(end),
             }
         )
-        return self.parse_timeseries(self._request(params))
+        df = self.parse_timeseries(self._request(params))
+        return self._clip_interval(df, start, end)
 
     def fetch_border(
         self,
@@ -79,7 +94,8 @@ class EntsoeExtractor:
                 "periodEnd": self._format_period(end),
             }
         )
-        return self.parse_timeseries(self._request(params))
+        df = self.parse_timeseries(self._request(params))
+        return self._clip_interval(df, start, end)
 
     @staticmethod
     def _strip_ns(tag: str) -> str:
@@ -169,9 +185,6 @@ class EntsoeExtractor:
                     continue
 
                 if curve_type == "A03":
-                    # ENTSO-E uses A03 variable-sized blocks: a Point marks the
-                    # beginning of a block and its value remains valid until the
-                    # next Point. Expand it to the full MTU grid before storage.
                     if end_text:
                         period_end = pd.Timestamp(end_text)
                         total_positions = int((period_end - period_start) / step)
