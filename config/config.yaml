@@ -45,42 +45,59 @@ borders:
   - [BE, NL]
 
 entsoe:
-  chunk_days: 7
+  chunk_days: 31
   datasets:
     day_ahead_prices:
       documentType: A44
-      processType: A01
+      contract_MarketAgreement.Type: A01
+      domain_params: [in_Domain, out_Domain]
       scope: zone
+      required: true
     actual_load:
       documentType: A65
       processType: A16
+      domain_params: [outBiddingZone_Domain, out_Domain]
       scope: zone
+      required: true
     day_ahead_load_forecast:
       documentType: A65
       processType: A01
+      domain_params: [outBiddingZone_Domain]
       scope: zone
+      required: true
     actual_generation_per_type:
       documentType: A75
       processType: A16
+      domain_params: [in_Domain]
       scope: zone
+      required: true
+      chunk_days: 7
     day_ahead_generation_forecast:
       documentType: A71
       processType: A01
+      domain_params: [in_Domain]
       scope: zone
+      required: true
     wind_solar_forecast:
       documentType: A69
       processType: A01
+      domain_params: [in_Domain]
       scope: zone
+      required: true
     physical_flows:
       documentType: A11
       scope: border
+      required: true
     scheduled_exchanges:
       documentType: A09
+      contract_MarketAgreement.Type: A01
       scope: border
+      required: true
     transfer_capacity:
       documentType: A61
-      contract_MarketAgreement_Type: A01
+      contract_MarketAgreement.Type: A01
       scope: border
+      required: false
 
 jao:
   # Endpoint paths are configurable because JAO periodically changes routing.
