@@ -34,11 +34,12 @@ def run_entsoe(settings: Settings, start: datetime, end: datetime) -> list[Path]
     cfg = settings.config
     extractor = EntsoeExtractor(settings.entsoe_base_url, settings.entsoe_token, HttpClient())
     out: list[Path] = []
-    chunk_days = int(cfg["entsoe"].get("chunk_days", 7))
+    default_chunk_days = int(cfg["entsoe"].get("chunk_days", 31))
 
     for name, ds in cfg["entsoe"]["datasets"].items():
         frames: list[pd.DataFrame] = []
         scope = ds["scope"]
+        chunk_days = int(ds.get("chunk_days", default_chunk_days))
 
         if scope == "zone":
             for zone_name, zone_cfg in cfg["zones"].items():
