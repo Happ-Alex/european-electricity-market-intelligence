@@ -10,7 +10,21 @@ from src.eem_intel.settings import load_settings
 
 START = datetime(2026, 8, 15, tzinfo=timezone.utc)
 END = datetime(2026, 8, 16, tzinfo=timezone.utc)
-EXPECTED_QUARTER_HOURS = 96
+HISTORICAL_START = datetime(2019, 6, 15, tzinfo=timezone.utc)
+HISTORICAL_END = datetime(2019, 6, 16, tzinfo=timezone.utc)
+
+
+def expected_daily_points(resolutions: list[str]) -> int | None:
+    if len(resolutions) != 1:
+        return None
+    resolution = resolutions[0]
+    if resolution == "PT15M":
+        return 96
+    if resolution == "PT30M":
+        return 48
+    if resolution == "PT60M" or resolution == "PT1H":
+        return 24
+    return None
 
 
 def main() -> None:
@@ -26,13 +40,16 @@ def main() -> None:
     border_from_eic = cfg["zones"][border_from]["eic"]
     border_to_eic = cfg["zones"][border_to]["eic"]
 
-    def run_one(name: str, ds: dict) -> tuple[str, bool, str]:
-        required = bool(ds.get("required", False))
-        extractor = EntsoeExtractor(
+    def new_extractor() -> EntsoeExtractor:
+        return EntsoeExtractor(
             base_url=settings.entsoe_base_url,
             security_token=settings.entsoe_token,
             http=HttpClient(timeout=90),
         )
+
+    def run_one(name: str, ds: dict) -> tuple[str, bool, str]:
+        required = bool(ds.get("required", False))
+        extractor = new_extractor()
         try:
             if ds["scope"] == "zone":
                 df = extractor.fetch_zone(ds, zone_eic, START, END)
@@ -54,12 +71,11 @@ def main() -> None:
             if required and df.empty:
                 semantic_errors.append("empty response")
 
-            # These three representative series should form one complete 15-minute
-            # delivery-day grid after A03 variable-block expansion and sequence selection.
             if name in {"day_ahead_prices", "physical_flows", "scheduled_exchanges"} and not df.empty:
-                if resolutions == ["PT15M"] and unique_timestamps != EXPECTED_QUARTER_HOURS:
+                expected = expected_daily_points(resolutions)
+                if expected is not None and unique_timestamps != expected:
                     semantic_errors.append(
-                        f"expected {EXPECTED_QUARTER_HOURS} unique PT15M timestamps, got {unique_timestamps}"
+                        f"expected {expected} unique timestamps, got {unique_timestamps}"
                     )
                 if duplicate_timestamps:
                     semantic_errors.append(f"duplicate timestamp rows={duplicate_timestamps}")
@@ -81,7 +97,7 @@ def main() -> None:
             return name, required, line
 
     print("ENTSO-E API token: accepted")
-    print(f"Sample period: {START.isoformat()} -> {END.isoformat()}")
+    print(f"Modern sample period: {START.isoformat()} -> {END.isoformat()}")
 
     failures: list[str] = []
     results: dict[str, str] = {}
@@ -98,9 +114,32 @@ def main() -> None:
     for name in datasets:
         print(results[name])
 
+    # Historical guard for the start of the intended 2019-2026 research period.
+    print(
+        f"Historical price sample: {HISTORICAL_START.isoformat()} -> {HISTORICAL_END.isoformat()}"
+    )
+    try:
+        price_ds = datasets["day_ahead_prices"]
+        hist = new_extractor().fetch_zone(
+            price_ds, zone_eic, HISTORICAL_START, HISTORICAL_END
+        )
+        resolutions = sorted(str(x) for x in hist["resolution"].dropna().unique()) if not hist.empty else []
+        unique_timestamps = int(hist["timestamp_utc"].nunique()) if not hist.empty else 0
+        duplicate_timestamps = int(hist.duplicated(["timestamp_utc"], keep=False).sum()) if not hist.empty else 0
+        expected = expected_daily_points(resolutions)
+        print(
+            f"day_ahead_prices_2019: rows={len(hist)}, unique_ts={unique_timestamps}, "
+            f"duplicate_ts={duplicate_timestamps}, resolutions={resolutions}"
+        )
+        if hist.empty or duplicate_timestamps or (expected is not None and unique_timestamps != expected):
+            failures.append("day_ahead_prices_2019")
+    except Exception as exc:
+        print(f"day_ahead_prices_2019: ERROR {type(exc).__name__}: {exc}")
+        failures.append("day_ahead_prices_2019")
+
     if failures:
         raise RuntimeError(
-            "ENTSO-E dataset QA failed: " + ", ".join(sorted(failures))
+            "ENTSO-E dataset QA failed: " + ", ".join(sorted(set(failures)))
         )
 
     print("ENTSO-E representative dataset validation: PASSED")
