@@ -1,0 +1,91 @@
+name: ENTSO-E chunked backfill 2019-2026
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/entsoe-chunked-backfill.yml'
+
+concurrency:
+  group: entsoe-chunked-backfill-v1
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate ENTSO-E before chunked backfill
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ENTSOE_SECURITY_TOKEN: ${{ secrets.ENTSOE_SECURITY_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run API and semantic validation
+        run: python scripts/test_entsoe_access.py
+
+  backfill:
+    name: ${{ matrix.year }} / ${{ matrix.dataset }}
+    needs: validate
+    if: ${{ needs.validate.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        year: [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+        dataset:
+          - day_ahead_prices
+          - actual_load
+          - day_ahead_load_forecast
+          - actual_generation_per_type
+          - day_ahead_generation_forecast
+          - wind_solar_forecast
+          - physical_flows
+          - scheduled_exchanges
+    env:
+      ENTSOE_SECURITY_TOKEN: ${{ secrets.ENTSOE_SECURITY_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download dataset in bounded chunks
+        run: >-
+          python scripts/backfill_entsoe_dataset.py
+          --year ${{ matrix.year }}
+          --dataset ${{ matrix.dataset }}
+
+      - name: Upload ENTSO-E dataset artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: entsoe-${{ matrix.year }}-${{ matrix.dataset }}
+          path: data/entsoe_backfill/${{ matrix.year }}/${{ matrix.dataset }}
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
