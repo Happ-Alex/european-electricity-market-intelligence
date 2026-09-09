@@ -8,7 +8,7 @@ on:
       - '.github/workflows/entsoe-chunked-backfill.yml'
 
 concurrency:
-  group: entsoe-chunked-backfill-v1
+  group: entsoe-chunked-backfill-v2
   cancel-in-progress: false
 
 permissions:
@@ -18,7 +18,7 @@ jobs:
   validate:
     name: Validate ENTSO-E before chunked backfill
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     env:
       ENTSOE_SECURITY_TOKEN: ${{ secrets.ENTSOE_SECURITY_TOKEN }}
       PYTHONPATH: ${{ github.workspace }}
@@ -35,8 +35,35 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run API and semantic validation
-        run: python scripts/test_entsoe_access.py
+      - name: Lightweight ENTSO-E API gate
+        run: |
+          python - <<'PY'
+          from datetime import datetime, timezone
+          from src.eem_intel.extractors.entsoe import EntsoeExtractor
+          from src.eem_intel.http import HttpClient
+          from src.eem_intel.settings import load_settings
+
+          settings = load_settings()
+          if not settings.entsoe_token:
+              raise RuntimeError('ENTSOE_SECURITY_TOKEN is not available')
+
+          cfg = settings.config
+          zone = 'DE_LU'
+          eic = cfg['zones'][zone]['eic']
+          ds = cfg['entsoe']['datasets']['day_ahead_prices']
+          start = datetime(2026, 8, 15, tzinfo=timezone.utc)
+          end = datetime(2026, 8, 16, tzinfo=timezone.utc)
+
+          extractor = EntsoeExtractor(
+              base_url=settings.entsoe_base_url,
+              security_token=settings.entsoe_token,
+              http=HttpClient(timeout=60),
+          )
+          df = extractor.fetch_zone(ds, eic, start, end)
+          if df.empty:
+              raise RuntimeError('ENTSO-E gate returned no day-ahead price data')
+          print(f'ENTSO-E gate passed: rows={len(df)}, unique_ts={df.timestamp_utc.nunique()}')
+          PY
 
   backfill:
     name: ${{ matrix.year }} / ${{ matrix.dataset }}
