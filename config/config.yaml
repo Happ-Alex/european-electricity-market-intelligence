@@ -45,7 +45,10 @@ borders:
   - [BE, NL]
 
 entsoe:
-  chunk_days: 31
+  # Long historical requests frequently hit ENTSO-E response-size limits.
+  # The chunked backfill uses these bounded windows from the start instead of
+  # requesting a whole year and recursively retrying it.
+  chunk_days: 14
   datasets:
     day_ahead_prices:
       documentType: A44
@@ -58,18 +61,21 @@ entsoe:
           classificationSequence_AttributeInstanceComponent.position: 1
       scope: zone
       required: true
+      chunk_days: 31
     actual_load:
       documentType: A65
       processType: A16
-      domain_params: [outBiddingZone_Domain, out_Domain]
+      domain_params: [outBiddingZone_Domain]
       scope: zone
       required: true
+      chunk_days: 14
     day_ahead_load_forecast:
       documentType: A65
       processType: A01
       domain_params: [outBiddingZone_Domain]
       scope: zone
       required: true
+      chunk_days: 14
     actual_generation_per_type:
       documentType: A75
       processType: A16
@@ -83,26 +89,31 @@ entsoe:
       domain_params: [in_Domain]
       scope: zone
       required: true
+      chunk_days: 14
     wind_solar_forecast:
       documentType: A69
       processType: A01
       domain_params: [in_Domain]
       scope: zone
       required: true
+      chunk_days: 14
     physical_flows:
       documentType: A11
       scope: border
       required: true
+      chunk_days: 31
     scheduled_exchanges:
       documentType: A09
       contract_MarketAgreement.Type: A01
       scope: border
       required: true
+      chunk_days: 31
     transfer_capacity:
       documentType: A61
       contract_MarketAgreement.Type: A01
       scope: border
       required: false
+      chunk_days: 31
 
 jao:
   # Endpoint paths are configurable because JAO periodically changes routing.
