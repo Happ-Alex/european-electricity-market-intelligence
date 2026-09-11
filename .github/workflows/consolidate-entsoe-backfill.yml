@@ -1,0 +1,53 @@
+name: Consolidate ENTSO-E backfill 2019-2026
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: GitHub Actions run containing the 64 ENTSO-E artifacts
+        required: true
+        default: '34383886032'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  consolidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download all ENTSO-E artifacts from source run
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+          pattern: entsoe-*
+          path: data/entsoe_artifacts
+
+      - name: Strict QA and consolidate
+        run: >-
+          python scripts/consolidate_entsoe_backfill.py
+          --input-root data/entsoe_artifacts
+          --output-root data/entsoe_consolidated
+
+      - name: Upload consolidated ENTSO-E dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: entsoe-consolidated-2019-2026
+          path: data/entsoe_consolidated
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
