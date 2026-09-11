@@ -1,0 +1,77 @@
+name: Repair and consolidate ENTSO-E backfill 2019-2026
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Original backfill run containing the 64 ENTSO-E artifacts
+        required: true
+        default: '34383886032'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  repair-and-consolidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      ENTSOE_SECURITY_TOKEN: ${{ secrets.ENTSOE_SECURITY_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download original ENTSO-E artifacts
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+          pattern: entsoe-*
+          path: data/entsoe_artifacts
+
+      - name: Repair only failed ENTSO-E ranges
+        run: >-
+          python scripts/repair_entsoe_backfill.py
+          --input-root data/entsoe_artifacts
+          --report data/entsoe_repair/repair_report.json
+          --min-window-hours 6
+
+      - name: Strict QA and consolidate repaired data
+        run: >-
+          python scripts/consolidate_entsoe_backfill.py
+          --input-root data/entsoe_artifacts
+          --output-root data/entsoe_consolidated
+
+      - name: Upload repair diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: entsoe-repair-diagnostics-2019-2026
+          path: |
+            data/entsoe_repair
+            data/entsoe_consolidated/qa_manifest_members_premerge.csv
+            data/entsoe_consolidated/qa_failures.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Upload consolidated ENTSO-E dataset
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: entsoe-consolidated-2019-2026
+          path: data/entsoe_consolidated
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
