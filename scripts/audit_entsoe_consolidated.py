@@ -58,6 +58,83 @@ def exact_duplicates(con: duckdb.DuckDBPyConnection, path: Path) -> int:
     )
 
 
+def compute_gap_coverage(
+    con: duckdb.DuckDBPyConnection,
+    dataset: str,
+    path: Path,
+    member: str,
+) -> pd.DataFrame:
+    """Calculate timestamp gaps without treating historical resolution changes as missing data.
+
+    ENTSO-E can switch a member from PT60M to PT15M within a year. A single
+    member-year resolution therefore overstates expected timestamps. We instead
+    collapse to one row per observed timestamp, attach the finest advertised
+    resolution at that timestamp, and compare every timestamp to the previous
+    timestamp using the *previous* timestamp's resolution. That makes a normal
+    60-minute -> 15-minute transition count as continuous while still detecting
+    genuine holes inside either regime.
+    """
+    resolution_case = "CASE resolution " + " ".join(
+        f"WHEN '{code}' THEN {minutes}" for code, minutes in RESOLUTION_MINUTES.items()
+    ) + " ELSE NULL END"
+
+    ts = con.execute(
+        f"SELECT {member} AS member, EXTRACT(year FROM timestamp_utc)::INTEGER AS year, "
+        "timestamp_utc, "
+        f"MIN({resolution_case}) AS resolution_minutes "
+        "FROM read_parquet(?) "
+        "GROUP BY 1,2,3 ORDER BY 1,2,3",
+        [str(path)],
+    ).fetchdf()
+
+    if ts.empty:
+        return pd.DataFrame(columns=[
+            "dataset", "member", "year", "observed_timestamps",
+            "expected_from_observed_resolution", "missing_timestamps",
+            "coverage_pct", "min_timestamp_utc", "max_timestamp_utc",
+            "resolutions_minutes",
+        ])
+
+    ts["timestamp_utc"] = pd.to_datetime(ts["timestamp_utc"], utc=True)
+    ts["resolution_minutes"] = pd.to_numeric(ts["resolution_minutes"], errors="coerce")
+
+    rows: list[dict] = []
+    for (member_value, year), g in ts.groupby(["member", "year"], sort=True, dropna=False):
+        g = g.sort_values("timestamp_utc").reset_index(drop=True)
+        observed = int(len(g))
+        missing = 0
+
+        if observed > 1:
+            deltas = g["timestamp_utc"].diff().dt.total_seconds().div(60.0)
+            prev_res = g["resolution_minutes"].shift(1)
+            for delta, step in zip(deltas.iloc[1:], prev_res.iloc[1:]):
+                if pd.isna(delta) or pd.isna(step) or step <= 0:
+                    continue
+                # Allow small floating-point/time conversion noise while counting
+                # only whole expected intervals absent after the previous point.
+                intervals = int(round(float(delta) / float(step)))
+                if intervals > 1:
+                    missing += intervals - 1
+
+        expected = observed + missing
+        coverage_pct = observed / expected * 100.0 if expected else None
+        resolutions = sorted({int(x) for x in g["resolution_minutes"].dropna().tolist()})
+        rows.append({
+            "dataset": dataset,
+            "member": member_value,
+            "year": int(year),
+            "observed_timestamps": observed,
+            "expected_from_observed_resolution": int(expected),
+            "missing_timestamps": int(missing),
+            "coverage_pct": coverage_pct,
+            "min_timestamp_utc": str(g["timestamp_utc"].min()),
+            "max_timestamp_utc": str(g["timestamp_utc"].max()),
+            "resolutions_minutes": ",".join(map(str, resolutions)),
+        })
+
+    return pd.DataFrame(rows)
+
+
 def audit_dataset(con: duckdb.DuckDBPyConnection, dataset: str, path: Path, output_root: Path) -> dict:
     if not path.exists():
         raise FileNotFoundError(path)
@@ -132,46 +209,10 @@ def audit_dataset(con: duckdb.DuckDBPyConnection, dataset: str, path: Path, outp
         resolution_counts.insert(0, "dataset", dataset)
         resolution_counts.to_csv(output_root / f"resolutions_{dataset}.csv", index=False)
 
-    gaps: list[dict] = []
+    gaps = pd.DataFrame()
     if "resolution" in columns and not resolution_counts.empty:
-        coverage = con.execute(
-            f"SELECT {member} AS member, EXTRACT(year FROM timestamp_utc)::INTEGER AS year, "
-            "MIN(timestamp_utc) AS min_ts, MAX(timestamp_utc) AS max_ts, "
-            "COUNT(DISTINCT timestamp_utc) AS observed_timestamps "
-            "FROM read_parquet(?) GROUP BY 1,2 ORDER BY 2,1",
-            [str(path)],
-        ).fetchdf()
-        res = resolution_counts.copy()
-        res["minutes"] = res["resolution"].map(RESOLUTION_MINUTES)
-        res = res.dropna(subset=["minutes"])
-        # ENTSO-E resolution can change over time for the same member. Infer the
-        # finest advertised resolution separately for every member-year rather
-        # than applying a later 15-minute resolution to earlier hourly data.
-        finest = res.groupby(["member", "year"], as_index=False)["minutes"].min()
-        coverage = coverage.merge(finest, on=["member", "year"], how="left")
-        for _, r in coverage.iterrows():
-            minutes = r["minutes"]
-            expected = None
-            missing = None
-            coverage_pct = None
-            if pd.notna(minutes) and pd.notna(r["min_ts"]) and pd.notna(r["max_ts"]):
-                delta_minutes = (pd.Timestamp(r["max_ts"]) - pd.Timestamp(r["min_ts"])).total_seconds() / 60.0
-                expected = int(round(delta_minutes / float(minutes))) + 1
-                missing = max(0, expected - int(r["observed_timestamps"]))
-                coverage_pct = min(100.0, int(r["observed_timestamps"]) / expected * 100.0) if expected else None
-            gaps.append({
-                "dataset": dataset,
-                "member": r["member"],
-                "year": int(r["year"]),
-                "resolution_minutes": None if pd.isna(minutes) else int(minutes),
-                "observed_timestamps": int(r["observed_timestamps"]),
-                "expected_between_member_minmax": expected,
-                "missing_between_member_minmax": missing,
-                "coverage_pct": coverage_pct,
-                "min_timestamp_utc": str(r["min_ts"]),
-                "max_timestamp_utc": str(r["max_ts"]),
-            })
-    pd.DataFrame(gaps).to_csv(output_root / f"gaps_{dataset}.csv", index=False)
+        gaps = compute_gap_coverage(con, dataset, path, member)
+    gaps.to_csv(output_root / f"gaps_{dataset}.csv", index=False)
 
     return {
         "dataset": dataset,
@@ -244,16 +285,24 @@ def main() -> None:
         if s["value_quality"].get("nonfinite_values", 0) > 0:
             critical.append(f"{s['dataset']}: {s['value_quality']['nonfinite_values']} non-finite values")
 
+    gap_member_years = 0
+    total_missing_timestamps = 0
+    if not gaps.empty and "missing_timestamps" in gaps.columns:
+        gap_member_years = int((gaps["missing_timestamps"].fillna(0) > 0).sum())
+        total_missing_timestamps = int(gaps["missing_timestamps"].fillna(0).sum())
+
     report = {
         "dataset_count": len(summaries),
         "total_rows": int(sum(x["rows"] for x in summaries)),
         "datasets": summaries,
         "critical_findings": critical,
         "coverage_rows": int(len(gaps)),
+        "member_years_with_timestamp_gaps": gap_member_years,
+        "total_missing_timestamps_from_observed_resolution": total_missing_timestamps,
         "notes": [
             "Negative day-ahead prices are valid market observations and are not treated as errors.",
             "Coverage is timestamp-level; datasets with several PSR/time-series rows per timestamp are intentionally not expected to be unique by timestamp.",
-            "Resolution is inferred separately by member-year because ENTSO-E publication granularity changes over time.",
+            "Gap detection follows the advertised resolution at each observed timestamp, so PT60M/PT15M changes inside a member-year are not misclassified as missing data.",
             "Historical empty DE_LU<->BE scheduled exchange members in 2019 are handled upstream as valid empty members.",
         ],
     }
