@@ -123,8 +123,9 @@ def audit_dataset(con: duckdb.DuckDBPyConnection, dataset: str, path: Path, outp
     resolution_counts = pd.DataFrame()
     if "resolution" in columns:
         resolution_counts = con.execute(
-            f"SELECT {member} AS member, resolution, COUNT(*) AS row_count, COUNT(DISTINCT timestamp_utc) AS distinct_timestamps "
-            "FROM read_parquet(?) GROUP BY 1,2 ORDER BY 1, row_count DESC",
+            f"SELECT {member} AS member, EXTRACT(year FROM timestamp_utc)::INTEGER AS year, resolution, "
+            "COUNT(*) AS row_count, COUNT(DISTINCT timestamp_utc) AS distinct_timestamps "
+            "FROM read_parquet(?) GROUP BY 1,2,3 ORDER BY 2,1,row_count DESC",
             [str(path)],
         ).fetchdf()
         resolution_counts = resolution_counts.rename(columns={"row_count": "rows"})
@@ -143,8 +144,11 @@ def audit_dataset(con: duckdb.DuckDBPyConnection, dataset: str, path: Path, outp
         res = resolution_counts.copy()
         res["minutes"] = res["resolution"].map(RESOLUTION_MINUTES)
         res = res.dropna(subset=["minutes"])
-        finest = res.groupby("member", as_index=False)["minutes"].min()
-        coverage = coverage.merge(finest, on="member", how="left")
+        # ENTSO-E resolution can change over time for the same member. Infer the
+        # finest advertised resolution separately for every member-year rather
+        # than applying a later 15-minute resolution to earlier hourly data.
+        finest = res.groupby(["member", "year"], as_index=False)["minutes"].min()
+        coverage = coverage.merge(finest, on=["member", "year"], how="left")
         for _, r in coverage.iterrows():
             minutes = r["minutes"]
             expected = None
@@ -249,6 +253,7 @@ def main() -> None:
         "notes": [
             "Negative day-ahead prices are valid market observations and are not treated as errors.",
             "Coverage is timestamp-level; datasets with several PSR/time-series rows per timestamp are intentionally not expected to be unique by timestamp.",
+            "Resolution is inferred separately by member-year because ENTSO-E publication granularity changes over time.",
             "Historical empty DE_LU<->BE scheduled exchange members in 2019 are handled upstream as valid empty members.",
         ],
     }
