@@ -49,7 +49,6 @@ def member_expr(columns: set[str]) -> str:
 
 
 def exact_duplicates(con: duckdb.DuckDBPyConnection, path: Path) -> int:
-    # Exact duplicates = total rows minus number of distinct complete rows.
     return int(
         con.execute(
             "SELECT (SELECT COUNT(*) FROM read_parquet(?)) - "
@@ -68,8 +67,8 @@ def audit_dataset(con: duckdb.DuckDBPyConnection, dataset: str, path: Path, outp
     member = member_expr(columns)
 
     stats = con.execute(
-        "SELECT COUNT(*) rows, MIN(timestamp_utc) min_ts, MAX(timestamp_utc) max_ts, "
-        "COUNT(DISTINCT timestamp_utc) distinct_timestamps "
+        "SELECT COUNT(*) AS row_count, MIN(timestamp_utc) AS min_ts, MAX(timestamp_utc) AS max_ts, "
+        "COUNT(DISTINCT timestamp_utc) AS distinct_timestamps "
         "FROM read_parquet(?)",
         [str(path)],
     ).fetchone()
@@ -79,7 +78,7 @@ def audit_dataset(con: duckdb.DuckDBPyConnection, dataset: str, path: Path, outp
     null_rows: list[dict] = []
     for col in schema["column_name"].tolist():
         row = con.execute(
-            f"SELECT COUNT(*) AS rows, COUNT(*) FILTER (WHERE {qident(col)} IS NULL) AS nulls "
+            f"SELECT COUNT(*) AS row_count, COUNT(*) FILTER (WHERE {qident(col)} IS NULL) AS nulls "
             "FROM read_parquet(?)",
             [str(path)],
         ).fetchone()
@@ -96,9 +95,9 @@ def audit_dataset(con: duckdb.DuckDBPyConnection, dataset: str, path: Path, outp
     value_quality = {}
     if "value" in columns:
         v = con.execute(
-            "SELECT COUNT(*) FILTER (WHERE value IS NULL) null_values, "
-            "COUNT(*) FILTER (WHERE NOT isfinite(value)) nonfinite_values, "
-            "COUNT(*) FILTER (WHERE value < 0) negative_values, "
+            "SELECT COUNT(*) FILTER (WHERE value IS NULL) AS null_values, "
+            "COUNT(*) FILTER (WHERE NOT isfinite(value)) AS nonfinite_values, "
+            "COUNT(*) FILTER (WHERE value < 0) AS negative_values, "
             "MIN(value), MAX(value), AVG(value) FROM read_parquet(?)",
             [str(path)],
         ).fetchone()
@@ -112,33 +111,32 @@ def audit_dataset(con: duckdb.DuckDBPyConnection, dataset: str, path: Path, outp
         }
 
     by_year = con.execute(
-        f"SELECT EXTRACT(year FROM timestamp_utc)::INTEGER year, {member} member, COUNT(*) rows, "
-        "COUNT(DISTINCT timestamp_utc) distinct_timestamps, MIN(timestamp_utc) min_ts, MAX(timestamp_utc) max_ts "
+        f"SELECT EXTRACT(year FROM timestamp_utc)::INTEGER AS year, {member} AS member, COUNT(*) AS row_count, "
+        "COUNT(DISTINCT timestamp_utc) AS distinct_timestamps, MIN(timestamp_utc) AS min_ts, MAX(timestamp_utc) AS max_ts "
         "FROM read_parquet(?) GROUP BY 1,2 ORDER BY 1,2",
         [str(path)],
     ).fetchdf()
+    by_year = by_year.rename(columns={"row_count": "rows"})
     by_year.insert(0, "dataset", dataset)
     by_year.to_csv(output_root / f"coverage_{dataset}.csv", index=False)
 
     resolution_counts = pd.DataFrame()
     if "resolution" in columns:
         resolution_counts = con.execute(
-            f"SELECT {member} member, resolution, COUNT(*) rows, COUNT(DISTINCT timestamp_utc) distinct_timestamps "
-            "FROM read_parquet(?) GROUP BY 1,2 ORDER BY 1, rows DESC",
+            f"SELECT {member} AS member, resolution, COUNT(*) AS row_count, COUNT(DISTINCT timestamp_utc) AS distinct_timestamps "
+            "FROM read_parquet(?) GROUP BY 1,2 ORDER BY 1, row_count DESC",
             [str(path)],
         ).fetchdf()
+        resolution_counts = resolution_counts.rename(columns={"row_count": "rows"})
         resolution_counts.insert(0, "dataset", dataset)
         resolution_counts.to_csv(output_root / f"resolutions_{dataset}.csv", index=False)
 
-    # Coverage based on the finest observed resolution per member/year. This measures whether
-    # at least one observation exists at each expected timestamp; it does not assume one row
-    # per timestamp because generation datasets legitimately contain multiple PSR series.
     gaps: list[dict] = []
     if "resolution" in columns and not resolution_counts.empty:
         coverage = con.execute(
-            f"SELECT {member} member, EXTRACT(year FROM timestamp_utc)::INTEGER year, "
-            "MIN(timestamp_utc) min_ts, MAX(timestamp_utc) max_ts, "
-            "COUNT(DISTINCT timestamp_utc) observed_timestamps "
+            f"SELECT {member} AS member, EXTRACT(year FROM timestamp_utc)::INTEGER AS year, "
+            "MIN(timestamp_utc) AS min_ts, MAX(timestamp_utc) AS max_ts, "
+            "COUNT(DISTINCT timestamp_utc) AS observed_timestamps "
             "FROM read_parquet(?) GROUP BY 1,2 ORDER BY 2,1",
             [str(path)],
         ).fetchdf()
