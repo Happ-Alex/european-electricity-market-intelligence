@@ -1,0 +1,72 @@
+name: ENTSO-E downstream audit and master dataset
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/audit_entsoe_consolidated.py'
+      - 'scripts/build_entsoe_master_dataset.py'
+      - 'src/eem_intel/colab.py'
+      - 'notebooks/01_entsoe_colab_quickstart.ipynb'
+      - '.github/workflows/entsoe-downstream-audit-master.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  audit-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download consolidated ENTSO-E artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: '34651501511'
+          name: entsoe-consolidated-2019-2026
+          path: data/entsoe_consolidated
+
+      - name: Run comprehensive data quality audit
+        run: >-
+          python scripts/audit_entsoe_consolidated.py
+          --input-root data/entsoe_consolidated
+          --output-root data/entsoe_audit
+
+      - name: Build canonical hourly master dataset and model features
+        run: >-
+          python scripts/build_entsoe_master_dataset.py
+          --input-root data/entsoe_consolidated
+          --output-root data/entsoe_master
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: entsoe-data-quality-audit-2019-2026
+          path: data/entsoe_audit
+          if-no-files-found: warn
+          retention-days: 90
+          compression-level: 6
+
+      - name: Upload hourly master dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: entsoe-master-hourly-2019-2026
+          path: data/entsoe_master
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
