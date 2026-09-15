@@ -20,8 +20,9 @@ def load_direction(path: Path, dataset: str, year: int, direction: str) -> pd.Da
     df = pd.read_parquet(path)
     if df.empty:
         return pd.DataFrame(columns=['timestamp_utc','value','dataset','direction','year'])
-    df['timestamp_utc'] = pd.to_datetime(df['timestamp_utc'], utc=True)
     out = df[['timestamp_utc','value']].copy()
+    out['timestamp_utc'] = pd.to_datetime(out['timestamp_utc'], utc=True, errors='coerce')
+    out['value'] = pd.to_numeric(out['value'], errors='coerce')
     out['dataset'] = dataset
     out['direction'] = direction
     out['year'] = year
@@ -45,6 +46,9 @@ def main() -> None:
         rows.append(load_direction(artifact_dir / 'UA_to_PL.parquet', dataset, year, 'UA_to_PL'))
 
     long = pd.concat(rows, ignore_index=True)
+    long['timestamp_utc'] = pd.to_datetime(long['timestamp_utc'], utc=True, errors='coerce')
+    long['value'] = pd.to_numeric(long['value'], errors='coerce')
+    long = long.dropna(subset=['timestamp_utc','value'])
     long.to_csv(args.output_root / 'ua_pl_border_raw_long.csv.gz', index=False, compression='gzip')
 
     # Average sub-hourly power within each UTC hour; do not sum MW measurements.
