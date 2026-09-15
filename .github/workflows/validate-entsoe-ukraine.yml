@@ -1,0 +1,44 @@
+name: Validate ENTSO-E Ukraine coverage
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [kmr-entsoe-ukraine]
+    paths:
+      - 'scripts/validate_entsoe_ukraine.py'
+      - '.github/workflows/validate-entsoe-ukraine.yml'
+
+permissions:
+  contents: read
+
+env:
+  ENTSOE_SECURITY_TOKEN: ${{ secrets.ENTSOE_SECURITY_TOKEN }}
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  validate-ukraine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate Ukraine zone and PL-UA border datasets
+        run: python scripts/validate_entsoe_ukraine.py
+
+      - name: Upload validation outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: entsoe-ukraine-validation
+          path: data/ukraine_validation
+          if-no-files-found: warn
+          retention-days: 30
