@@ -1,0 +1,53 @@
+name: Consolidate ENTSO-E PL-UA border data
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [kmr-entsoe-ukraine]
+    paths:
+      - 'scripts/consolidate_ua_border.py'
+      - '.github/workflows/consolidate-entsoe-ukraine-border.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  consolidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pandas pyarrow
+
+      - name: Download PL-UA yearly artifacts
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: '35019340800'
+          pattern: entsoe-ua-*
+          path: data/ua_artifacts
+
+      - name: Consolidate to hourly table and annual summary
+        run: >-
+          python scripts/consolidate_ua_border.py
+          --input-root data/ua_artifacts
+          --output-root data/ua_consolidated
+
+      - name: Upload consolidated Ukraine border data
+        uses: actions/upload-artifact@v4
+        with:
+          name: entsoe-ua-border-consolidated-2019-2026
+          path: data/ua_consolidated
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 6
