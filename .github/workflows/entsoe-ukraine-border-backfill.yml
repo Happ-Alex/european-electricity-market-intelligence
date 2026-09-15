@@ -1,0 +1,55 @@
+name: ENTSO-E PL-UA border backfill 2019-2026
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [kmr-entsoe-ukraine]
+    paths:
+      - 'scripts/backfill_entsoe_ukraine_border.py'
+      - '.github/workflows/entsoe-ukraine-border-backfill.yml'
+
+permissions:
+  contents: read
+
+env:
+  ENTSOE_SECURITY_TOKEN: ${{ secrets.ENTSOE_SECURITY_TOKEN }}
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        year: [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+        dataset: [physical_flows, scheduled_exchanges]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Backfill PL-UA border
+        run: >-
+          python scripts/backfill_entsoe_ukraine_border.py
+          --year ${{ matrix.year }}
+          --dataset ${{ matrix.dataset }}
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: entsoe-ua-${{ matrix.dataset }}-${{ matrix.year }}
+          path: data/entsoe_ukraine_border/${{ matrix.year }}/${{ matrix.dataset }}
+          if-no-files-found: warn
+          retention-days: 90
+          compression-level: 0
